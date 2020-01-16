@@ -1,7 +1,9 @@
-package ldap
+package x500dn
 
 import (
 	"bytes"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	enchex "encoding/hex"
 	"errors"
 	"fmt"
@@ -10,33 +12,57 @@ import (
 	ber "github.com/go-asn1-ber/asn1-ber"
 )
 
-// AttributeTypeAndValue represents an attributeTypeAndValue from https://tools.ietf.org/html/rfc4514
-type AttributeTypeAndValue struct {
-	// Type is the attribute type
-	Type string
-	// Value is the attribute value
-	Value string
-}
-
-// RelativeDN represents a relativeDistinguishedName from https://tools.ietf.org/html/rfc4514
-type RelativeDN struct {
-	Attributes []*AttributeTypeAndValue
-}
-
-// DN represents a distinguishedName from https://tools.ietf.org/html/rfc4514
-type DN struct {
-	RDNs []*RelativeDN
+var oids = map[string]asn1.ObjectIdentifier{
+	"businesscategory":           {2, 5, 4, 15},
+	"c":                          {2, 5, 4, 6},
+	"cn":                         {2, 5, 4, 3},
+	"dc":                         {0, 9, 2342, 19200300, 100, 1, 25},
+	"description":                {2, 5, 4, 13},
+	"destinationindicator":       {2, 5, 4, 27},
+	"distinguishedName":          {2, 5, 4, 49},
+	"dnqualifier":                {2, 5, 4, 46},
+	"enhancedsearchguide":        {2, 5, 4, 47},
+	"facsimiletelephonenumber":   {2, 5, 4, 23},
+	"generationqualifier":        {2, 5, 4, 44},
+	"givenname":                  {2, 5, 4, 42},
+	"houseidentifier":            {2, 5, 4, 51},
+	"initials":                   {2, 5, 4, 43},
+	"internationalisdnnumber":    {2, 5, 4, 25},
+	"l":                          {2, 5, 4, 7},
+	"member":                     {2, 5, 4, 31},
+	"name":                       {2, 5, 4, 41},
+	"o":                          {2, 5, 4, 10},
+	"ou":                         {2, 5, 4, 11},
+	"owner":                      {2, 5, 4, 32},
+	"physicaldeliveryofficename": {2, 5, 4, 19},
+	"postaladdress":              {2, 5, 4, 16},
+	"postalcode":                 {2, 5, 4, 17},
+	"postOfficebox":              {2, 5, 4, 18},
+	"preferreddeliverymethod":    {2, 5, 4, 28},
+	"registeredaddress":          {2, 5, 4, 26},
+	"roleoccupant":               {2, 5, 4, 33},
+	"searchguide":                {2, 5, 4, 14},
+	"seealso":                    {2, 5, 4, 34},
+	"serialnumber":               {2, 5, 4, 5},
+	"sn":                         {2, 5, 4, 4},
+	"st":                         {2, 5, 4, 8},
+	"street":                     {2, 5, 4, 9},
+	"telephonenumber":            {2, 5, 4, 20},
+	"teletexterminalidentifier":  {2, 5, 4, 22},
+	"telexnumber":                {2, 5, 4, 21},
+	"title":                      {2, 5, 4, 12},
+	"uid":                        {0, 9, 2342, 19200300, 100, 1, 1},
+	"uniquemember":               {2, 5, 4, 50},
+	"userpassword":               {2, 5, 4, 35},
+	"x121address":                {2, 5, 4, 24},
 }
 
 // ParseDN returns a distinguishedName or an error.
 // The function respects https://tools.ietf.org/html/rfc4514
-func ParseDN(str string) (*DN, error) {
-	dn := new(DN)
-	dn.RDNs = make([]*RelativeDN, 0)
-	rdn := new(RelativeDN)
-	rdn.Attributes = make([]*AttributeTypeAndValue, 0)
+func ParseDN(str string) (*pkix.Name, error) {
+	dn := make(pkix.RelativeDistinguishedNameSET, 0)
 	buffer := bytes.Buffer{}
-	attribute := new(AttributeTypeAndValue)
+	rdn := new(pkix.AttributeTypeAndValue)
 	escaping := false
 
 	unescapedTrailingSpaces := 0
@@ -77,7 +103,7 @@ func ParseDN(str string) (*DN, error) {
 			unescapedTrailingSpaces = 0
 			escaping = true
 		case char == '=':
-			attribute.Type = stringFromBuffer()
+			rdn.Type = oids[strings.ToLower(stringFromBuffer())]
 			// Special case: If the first character in the value is # the
 			// following data is BER encoded so we can just fast forward
 			// and decode.
@@ -103,16 +129,15 @@ func ParseDN(str string) (*DN, error) {
 			}
 		case char == ',' || char == '+':
 			// We're done with this RDN or value, push it
-			if len(attribute.Type) == 0 {
+			if len(rdn.Type) == 0 {
 				return nil, errors.New("incomplete type, value pair")
 			}
-			attribute.Value = stringFromBuffer()
-			rdn.Attributes = append(rdn.Attributes, attribute)
-			attribute = new(AttributeTypeAndValue)
+			rdn.Value = stringFromBuffer()
+			dn = append(dn, *rdn)
+			rdn = new(pkix.AttributeTypeAndValue)
 			if char == ',' {
-				dn.RDNs = append(dn.RDNs, rdn)
-				rdn = new(RelativeDN)
-				rdn.Attributes = make([]*AttributeTypeAndValue, 0)
+				dn = append(dn, *rdn)
+				rdn = new(pkix.AttributeTypeAndValue)
 			}
 		case char == ' ' && buffer.Len() == 0:
 			// ignore unescaped leading spaces
@@ -129,79 +154,15 @@ func ParseDN(str string) (*DN, error) {
 		}
 	}
 	if buffer.Len() > 0 {
-		if len(attribute.Type) == 0 {
+		if len(rdn.Type) == 0 {
 			return nil, errors.New("DN ended with incomplete type, value pair")
 		}
-		attribute.Value = stringFromBuffer()
-		rdn.Attributes = append(rdn.Attributes, attribute)
-		dn.RDNs = append(dn.RDNs, rdn)
+		rdn.Value = stringFromBuffer()
+		dn = append(dn, *rdn)
 	}
-	return dn, nil
-}
 
-// Equal returns true if the DNs are equal as defined by rfc4517 4.2.15 (distinguishedNameMatch).
-// Returns true if they have the same number of relative distinguished names
-// and corresponding relative distinguished names (by position) are the same.
-func (d *DN) Equal(other *DN) bool {
-	if len(d.RDNs) != len(other.RDNs) {
-		return false
-	}
-	for i := range d.RDNs {
-		if !d.RDNs[i].Equal(other.RDNs[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// AncestorOf returns true if the other DN consists of at least one RDN followed by all the RDNs of the current DN.
-// "ou=widgets,o=acme.com" is an ancestor of "ou=sprockets,ou=widgets,o=acme.com"
-// "ou=widgets,o=acme.com" is not an ancestor of "ou=sprockets,ou=widgets,o=foo.com"
-// "ou=widgets,o=acme.com" is not an ancestor of "ou=widgets,o=acme.com"
-func (d *DN) AncestorOf(other *DN) bool {
-	if len(d.RDNs) >= len(other.RDNs) {
-		return false
-	}
-	// Take the last `len(d.RDNs)` RDNs from the other DN to compare against
-	otherRDNs := other.RDNs[len(other.RDNs)-len(d.RDNs):]
-	for i := range d.RDNs {
-		if !d.RDNs[i].Equal(otherRDNs[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// Equal returns true if the RelativeDNs are equal as defined by rfc4517 4.2.15 (distinguishedNameMatch).
-// Relative distinguished names are the same if and only if they have the same number of AttributeTypeAndValues
-// and each attribute of the first RDN is the same as the attribute of the second RDN with the same attribute type.
-// The order of attributes is not significant.
-// Case of attribute types is not significant.
-func (r *RelativeDN) Equal(other *RelativeDN) bool {
-	if len(r.Attributes) != len(other.Attributes) {
-		return false
-	}
-	return r.hasAllAttributes(other.Attributes) && other.hasAllAttributes(r.Attributes)
-}
-
-func (r *RelativeDN) hasAllAttributes(attrs []*AttributeTypeAndValue) bool {
-	for _, attr := range attrs {
-		found := false
-		for _, myattr := range r.Attributes {
-			if myattr.Equal(attr) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
-}
-
-// Equal returns true if the AttributeTypeAndValue is equivalent to the specified AttributeTypeAndValue
-// Case of the attribute type is not significant
-func (a *AttributeTypeAndValue) Equal(other *AttributeTypeAndValue) bool {
-	return strings.EqualFold(a.Type, other.Type) && a.Value == other.Value
+	var sequence = pkix.RDNSequence{dn}
+	var name pkix.Name
+	name.FillFromRDNSequence(&sequence)
+	return &name, nil
 }
