@@ -164,5 +164,27 @@ func ParseDN(str string) (*pkix.Name, error) {
 	var sequence = pkix.RDNSequence{dn}
 	var name pkix.Name
 	name.FillFromRDNSequence(&sequence)
+	err := fillExtraNames(&sequence, &name)
+	if err != nil {
+		return nil, err
+	}
 	return &name, nil
+}
+
+// Fill in ExtranNames with RDNs with OID prefix other than 2.5.4
+func fillExtraNames(rdns *pkix.RDNSequence, name *pkix.Name) error {
+	for _, rdn := range *rdns {
+		if len(rdn) == 0 {
+			continue
+		}
+
+		for _, atv := range rdn {
+			if atv.Type.Equal(oids["dc"]) {
+				// IA5String
+				atv.Value = asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte(atv.Value.(string))}
+				name.ExtraNames = append(name.ExtraNames, atv)
+			}
+		}
+	}
+	return nil
 }
