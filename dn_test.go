@@ -1,6 +1,8 @@
 package x500dn
 
 import (
+	"encoding/asn1"
+	"reflect"
 	"testing"
 )
 
@@ -15,13 +17,32 @@ func TestDnParse(t *testing.T) {
 	}
 }
 
+func TestEscape(t *testing.T) {
+	dn, err := ParseDN("CN=John \"Bob\" Doe")
+	if err != nil {
+		t.Errorf("Failed %s\n", err)
+	}
+	if !(dn.CommonName == "John \"Bob\" Doe") {
+		t.Errorf("Failed: dn not as expected %v\n", dn)
+	}
+
+	dn, err = ParseDN("CN=Before\\0DAfter")
+	if err != nil {
+		t.Errorf("Failed %s\n", err)
+	}
+	if !(dn.CommonName == "Before\rAfter") {
+		t.Errorf("Failed: dn not as expected %v\n", dn)
+	}
+}
+
 func TestParseDomainComponent(t *testing.T) {
 	dn, err := ParseDN("CN=John Doe,DC=domain-component")
 	if err != nil {
 		t.Errorf("Failed %s\n", err)
 	}
 
-	if !(dn.CommonName == "John Doe" && dn.ExtraNames[0].Value == "domain-component") {
+	expected := asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte("domain-component")}
+	if !(dn.CommonName == "John Doe" && reflect.DeepEqual(dn.ExtraNames[0].Value.(asn1.RawValue), expected)) {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
 

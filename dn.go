@@ -110,7 +110,7 @@ func ParseDN(str string) (*pkix.Name, error) {
 			if len(str) > i+1 && str[i+1] == '#' {
 				i += 2
 				index := strings.IndexAny(str[i:], ",+")
-				data := str
+				var data string
 				if index > 0 {
 					data = str[i : i+index]
 				} else {
@@ -171,7 +171,7 @@ func ParseDN(str string) (*pkix.Name, error) {
 	return &name, nil
 }
 
-// Fill in ExtranNames with RDNs with OID prefix other than 2.5.4
+// Fill in ExtraNames with RDNs with OID prefix other than 2.5.4
 func fillExtraNames(rdns *pkix.RDNSequence, name *pkix.Name) error {
 	for _, rdn := range *rdns {
 		if len(rdn) == 0 {
