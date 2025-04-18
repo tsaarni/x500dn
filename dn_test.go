@@ -12,7 +12,7 @@ func TestDnParse(t *testing.T) {
 		t.Errorf("Failed %s\n", err)
 	}
 
-	if !(dn.CommonName == "John Doe" && dn.OrganizationalUnit[0] == "People" && dn.Organization[0] == "MyCompany") {
+	if dn.CommonName != "John Doe" || dn.OrganizationalUnit[0] != "People" || dn.Organization[0] != "MyCompany" {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
 }
@@ -22,7 +22,7 @@ func TestEscape(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed %s\n", err)
 	}
-	if !(dn.CommonName == "John \"Bob\" Doe") {
+	if dn.CommonName != "John \"Bob\" Doe" {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
 
@@ -30,7 +30,7 @@ func TestEscape(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed %s\n", err)
 	}
-	if !(dn.CommonName == "Before\rAfter") {
+	if dn.CommonName != "Before\rAfter" {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
 }
@@ -42,8 +42,19 @@ func TestParseDomainComponent(t *testing.T) {
 	}
 
 	expected := asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte("domain-component")}
-	if !(dn.CommonName == "John Doe" && reflect.DeepEqual(dn.ExtraNames[0].Value.(asn1.RawValue), expected)) {
+	if dn.CommonName != "John Doe" || !reflect.DeepEqual(dn.ExtraNames[0].Value.(asn1.RawValue), expected) {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
+}
 
+func TestParseEmailAddress(t *testing.T) {
+	dn, err := ParseDN("CN=John Doe, emailAddress=john@example.com")
+	if err != nil {
+		t.Errorf("Failed %s\n", err)
+	}
+
+	expected := asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte("john@example.com")}
+	if dn.CommonName != "John Doe" || !reflect.DeepEqual(dn.ExtraNames[0].Value.(asn1.RawValue), expected) {
+		t.Errorf("Failed: dn not as expected %v\n", dn)
+	}
 }

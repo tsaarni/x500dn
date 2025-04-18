@@ -21,6 +21,7 @@ var oids = map[string]asn1.ObjectIdentifier{
 	"destinationindicator":       {2, 5, 4, 27},
 	"distinguishedName":          {2, 5, 4, 49},
 	"dnqualifier":                {2, 5, 4, 46},
+	"emailaddress":               {1, 2, 840, 113549, 1, 9, 1},
 	"enhancedsearchguide":        {2, 5, 4, 47},
 	"facsimiletelephonenumber":   {2, 5, 4, 23},
 	"generationqualifier":        {2, 5, 4, 44},
@@ -179,7 +180,7 @@ func fillExtraNames(rdns *pkix.RDNSequence, name *pkix.Name) error {
 		}
 
 		for _, atv := range rdn {
-			if atv.Type.Equal(oids["dc"]) {
+			if atv.Type.Equal(oids["dc"]) || atv.Type.Equal(oids["emailaddress"]) {
 				// IA5String
 				atv.Value = asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte(atv.Value.(string))}
 				name.ExtraNames = append(name.ExtraNames, atv)
