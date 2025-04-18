@@ -58,6 +58,12 @@ var oids = map[string]asn1.ObjectIdentifier{
 	"x121address":                {2, 5, 4, 24},
 }
 
+// Aliases for the attribute names.
+// e.g. from https://learn.microsoft.com/en-us/windows/win32/seccrypto/name-properties
+var alias = map[string]string{
+	"e": "emailaddress",
+}
+
 // ParseDN returns a distinguishedName or an error.
 // The function respects https://tools.ietf.org/html/rfc4514
 func ParseDN(str string) (*pkix.Name, error) {
@@ -104,7 +110,12 @@ func ParseDN(str string) (*pkix.Name, error) {
 			unescapedTrailingSpaces = 0
 			escaping = true
 		case char == '=':
-			rdn.Type = oids[strings.ToLower(stringFromBuffer())]
+			attribute := strings.ToLower(stringFromBuffer())
+			// Resolve alias if present
+			if aliasName, ok := alias[attribute]; ok {
+				attribute = aliasName
+			}
+			rdn.Type = oids[attribute]
 			// Special case: If the first character in the value is # the
 			// following data is BER encoded so we can just fast forward
 			// and decode.

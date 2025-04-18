@@ -58,3 +58,15 @@ func TestParseEmailAddress(t *testing.T) {
 		t.Errorf("Failed: dn not as expected %v\n", dn)
 	}
 }
+
+func TestParsesAlias(t *testing.T) {
+	dn, err := ParseDN("CN=John Doe, E=john@example.com")
+	if err != nil {
+		t.Errorf("Failed %s\n", err)
+	}
+
+	expected := asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte("john@example.com")}
+	if dn.CommonName != "John Doe" || !reflect.DeepEqual(dn.ExtraNames[0].Value.(asn1.RawValue), expected) {
+		t.Errorf("Failed: dn not as expected %v\n", dn)
+	}
+}
