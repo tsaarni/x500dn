@@ -21,6 +21,7 @@ var oids = map[string]asn1.ObjectIdentifier{
 	"destinationindicator":       {2, 5, 4, 27},
 	"distinguishedName":          {2, 5, 4, 49},
 	"dnqualifier":                {2, 5, 4, 46},
+	"emailaddress":               {1, 2, 840, 113549, 1, 9, 1},
 	"enhancedsearchguide":        {2, 5, 4, 47},
 	"facsimiletelephonenumber":   {2, 5, 4, 23},
 	"generationqualifier":        {2, 5, 4, 44},
@@ -55,6 +56,12 @@ var oids = map[string]asn1.ObjectIdentifier{
 	"uniquemember":               {2, 5, 4, 50},
 	"userpassword":               {2, 5, 4, 35},
 	"x121address":                {2, 5, 4, 24},
+}
+
+// Aliases for the attribute names.
+// e.g. from https://learn.microsoft.com/en-us/windows/win32/seccrypto/name-properties
+var alias = map[string]string{
+	"e": "emailaddress",
 }
 
 // ParseDN returns a distinguishedName or an error.
@@ -103,7 +110,12 @@ func ParseDN(str string) (*pkix.Name, error) {
 			unescapedTrailingSpaces = 0
 			escaping = true
 		case char == '=':
-			rdn.Type = oids[strings.ToLower(stringFromBuffer())]
+			attribute := strings.ToLower(stringFromBuffer())
+			// Resolve alias if present
+			if aliasName, ok := alias[attribute]; ok {
+				attribute = aliasName
+			}
+			rdn.Type = oids[attribute]
 			// Special case: If the first character in the value is # the
 			// following data is BER encoded so we can just fast forward
 			// and decode.
@@ -179,7 +191,7 @@ func fillExtraNames(rdns *pkix.RDNSequence, name *pkix.Name) error {
 		}
 
 		for _, atv := range rdn {
-			if atv.Type.Equal(oids["dc"]) {
+			if atv.Type.Equal(oids["dc"]) || atv.Type.Equal(oids["emailaddress"]) {
 				// IA5String
 				atv.Value = asn1.RawValue{Tag: 22, Class: 0, Bytes: []byte(atv.Value.(string))}
 				name.ExtraNames = append(name.ExtraNames, atv)
